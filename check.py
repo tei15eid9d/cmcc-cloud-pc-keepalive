@@ -6,7 +6,7 @@
 用法:  python3 check.py           （或 python3 check.py --port 8765）
 
 检查项：
-  1. Python 版本 >= 3.7
+  1. Python 版本 >= 3.9
   2. 程序文件完整性
   3. data 目录可写
   4. 二维码生成器自检（纯本地算法）
@@ -73,16 +73,16 @@ def main():
     print(' 目录: %s' % BASE_DIR)
     print('=' * 64)
 
-    # 1. Python 版本
+    # 1. Python 版本（qrcodegen.py 用了 list[int] 注解，需要 3.9+）
     v = sys.version_info
-    ok = (v.major, v.minor) >= (3, 7)
+    ok = (v.major, v.minor) >= (3, 9)
     report('Python 版本', ok, '%d.%d.%d' % (v.major, v.minor, v.micro))
     if not ok:
-        print('\n%sPython 版本过低，请升级到 3.7+（推荐 3.9+）%s' % (RED, END))
+        print('\n%sPython 版本过低，请升级到 3.9+%s' % (RED, END))
         return 1
 
     # 2. 文件完整性
-    need = ['cmcc_api.py', 'server.py', 'panel.html', 'qr.py']
+    need = ['cmcc_api.py', 'server.py', 'panel.html', 'qr.py', 'qrcodegen.py']
     missing = [f for f in need if not os.path.exists(os.path.join(BASE_DIR, f))]
     report('程序文件完整性', not missing,
            '缺失: %s' % ','.join(missing) if missing else '%d 个文件齐全' % len(need))
