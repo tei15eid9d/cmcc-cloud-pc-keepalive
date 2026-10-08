@@ -636,6 +636,47 @@ SUPERVISOR = Supervisor()
 PANEL_PASS = os.environ.get('CMCC_PANEL_PASS', '')
 AUTH_COOKIE = 'cmcc_auth'
 
+# 未认证时的登录页（内联，避免在公网暴露面板本体）
+LOGIN_PAGE = """<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>移动云电脑保活面板 · 登录</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+      background:#f4f6f9;font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#1f2937}
+ .box{background:#fff;border:1px solid #e3e8ef;border-radius:14px;box-shadow:0 8px 30px rgba(16,24,40,.1);
+      padding:28px 30px;width:100%;max-width:340px}
+ h1{font-size:17px;margin:0 0 4px;font-weight:700}
+ .sub{font-size:12px;color:#6b7280;margin-bottom:18px}
+ input{width:100%;padding:10px 12px;border:1px solid #e3e8ef;border-radius:8px;font-size:14px;outline:none}
+ input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+ button{margin-top:12px;width:100%;padding:10px;border:0;border-radius:8px;background:#2563eb;
+        color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+ button:hover{background:#1d4ed8}
+ .err{color:#dc2626;font-size:12.5px;margin-top:10px;min-height:18px}
+</style></head><body>
+<div class="box">
+  <h1>移动云电脑 · 保活面板</h1>
+  <div class="sub">请输入面板访问密码</div>
+  <form id="f"><input type="password" id="p" placeholder="访问密码" autofocus>
+  <button type="submit">进入面板</button></form>
+  <div class="err" id="e"></div>
+</div>
+<script>
+var f=document.getElementById('f'),p=document.getElementById('p'),e=document.getElementById('e');
+f.onsubmit=function(ev){
+  ev.preventDefault();
+  var v=p.value.trim();
+  if(!v){ e.textContent='请输入密码'; return; }
+  fetch('/api/state?token='+encodeURIComponent(v)).then(function(r){return r.json();}).then(function(d){
+    if(d && d.ok){ location.href='/?token='+encodeURIComponent(v); }
+    else { e.textContent='密码不正确'; p.select(); }
+  }).catch(function(){ e.textContent='网络错误，请重试'; });
+};
+</script></body></html>
+"""
+
 
 def pub_account(acc):
     """输出给前端的账号视图（去掉敏感 token 全量，仅显示片段）"""
@@ -765,13 +806,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path in ('/', '/index.html'):
             if PANEL_PASS and not self._authed(q):
-                try:
-                    with open(PANEL_FILE, 'rb') as f:
-                        page = f.read()
-                except Exception:
-                    self._send(500, 'panel.html missing', 'text/plain; charset=utf-8')
-                    return
-                self._send(200, page, 'text/html; charset=utf-8')
+                # 未认证：只给登录页，不暴露面板本体
+                self._send(200, LOGIN_PAGE.encode('utf-8'), 'text/html; charset=utf-8')
                 return
             try:
                 with open(PANEL_FILE, 'rb') as f:
