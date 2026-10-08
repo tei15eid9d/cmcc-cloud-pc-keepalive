@@ -7,7 +7,8 @@ cmcc_server/
 ├── cmcc_api.py    # 协议客户端（签名 / RSA 加密 / 登录 / 心跳 / 唤醒）
 ├── server.py      # 保活引擎 + Web 面板服务 + HTTP API
 ├── panel.html     # 面板前端（单文件原生 JS，无 CDN）
-├── qr.py          # 零依赖二维码编码器（扫码登录用，纯标准库）
+├── qr.py          # 二维码生成（扫码登录用；编码核心为 qrcodegen.py，MIT）
+├── qrcodegen.py   # Nayuki QR-Code-generator 单文件库（MIT，纯标准库）
 ├── check.py       # 部署自检脚本：联网/代理/证书/时间/端口 一键排查
 ├── deploy.sh      # Linux 一键部署（systemd，部署前自动自检）
 ├── start.bat      # Windows 本地启动
@@ -49,7 +50,7 @@ python3 check.py --port 8765
 
 | 检查项 | 不通过时的处理 |
 |---|---|
-| Python ≥ 3.7 | 升级 Python |
+| Python ≥ 3.9 | 升级 Python |
 | 程序文件完整性 | 整个目录重新拷贝（别漏 `qr.py`/`check.py`） |
 | data 目录可写 | 检查目录权限 / 用 root 跑 |
 | 二维码生成器 | 纯本地算法，不该失败；失败即文件损坏 |
@@ -106,7 +107,7 @@ python3 -u server.py --port 8765
 #   setsid nohup python3 -u server.py --port 8765 > run.log 2>&1 &
 ```
 
-要求：**Python 3.7+，无任何 pip 依赖**。服务器最小化安装也带 python3。
+要求：**Python 3.9+，无任何 pip 依赖**（二维码库 qrcodegen.py 随仓库附带，纯标准库实现）。
 
 ### 安全建议（公网部署）
 
