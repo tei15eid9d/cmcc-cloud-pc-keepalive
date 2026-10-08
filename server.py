@@ -1539,8 +1539,8 @@ def cli_import_token(argv):
 def preflight():
     """启动自检：把环境异常直接写进面板日志，避免换服务器后"默默不工作" """
     v = sys.version_info
-    if (v.major, v.minor) < (3, 7):
-        LOG.error('Python 版本过低 (%d.%d)，请升级到 3.7+' % (v.major, v.minor))
+    if (v.major, v.minor) < (3, 9):
+        LOG.error('Python 版本过低 (%d.%d)，请升级到 3.9+（qrcodegen 需要）' % (v.major, v.minor))
         return False
     if not os.path.exists(PANEL_FILE):
         LOG.error('缺少面板文件 panel.html，Web 面板无法打开')
