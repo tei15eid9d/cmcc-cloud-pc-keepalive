@@ -26,8 +26,8 @@ fi
 VER="$($PY -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
 MAJ="${VER%%.*}"; MIN="${VER##*.}"
 echo "[1/5] Python: $($PY --version 2>&1)"
-if [ "$MAJ" -lt 3 ] || { [ "$MAJ" -eq 3 ] && [ "$MIN" -lt 7 ]; }; then
-  echo "[!] Python 版本过低（需要 3.7+），当前 $VER"
+if [ "$MAJ" -lt 3 ] || { [ "$MAJ" -eq 3 ] && [ "$MIN" -lt 9 ]; }; then
+  echo "[!] Python 版本过低（需要 3.9+，qrcodegen 依赖），当前 $VER"
   exit 1
 fi
 
