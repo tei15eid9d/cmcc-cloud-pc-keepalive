@@ -165,6 +165,16 @@ python3 -u server.py --port 8765
    - 顶部总览条：账号数 / 云电脑数 / **正在保活**（心跳 2 分钟内）/ **需要关注**（失效与到期账号）
 
 
+### 面板访问密码（公网部署必开）
+
+设置 `CMCC_PANEL_PASS` 后：未认证访问 `/` 只会看到一个登录页，所有 `/api/*` 返回 401；
+带正确密码访问 `/?token=密码` 会下发 30 天 Cookie，之后直接打开即可。
+
+```bash
+# systemd 里加一行 Environment=CMCC_PANEL_PASS=你的密码，然后
+systemctl restart cmcc-keepalive
+```
+
 ### 导入已有会话（不想重新登录时）
 
 服务器上没有客户端，可把已有登录态导进去：
