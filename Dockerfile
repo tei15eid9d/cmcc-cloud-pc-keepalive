@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY cmcc_api.py server.py panel.html qr.py check.py ./
+COPY cmcc_api.py server.py panel.html qr.py qrcodegen.py check.py ./
 RUN mkdir -p /app/data
 
 ENV CMCC_PORT=8765
