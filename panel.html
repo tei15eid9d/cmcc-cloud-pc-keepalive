@@ -215,6 +215,12 @@
             <div class="row"><button class="primary" id="btnQr">获取二维码</button>
             <button class="sm" id="btnQrRefresh" style="display:none">刷新</button></div>
             <div id="qrStatus" class="hint" style="margin-top:8px">用「移动爱家（原和家亲）」APP 扫码登录</div>
+            <div class="hint" style="margin-top:8px;color:#b45309;line-height:1.7">
+              ⚠ 必须用 <b>APP 里的「扫一扫」</b> 扫，不能用微信 / 系统相机 ——
+              这个二维码内容是官方的 <code>redirect.html</code> 跳转地址，
+              只有 APP 内置扫码器认得，用普通相机扫只会打开一个网页，不会登录。<br>
+              路径：移动爱家 APP → 首页右上角「扫一扫」。
+            </div>
           </div>
         </div>
         <div class="hint">二维码由服务端本地生成，不经过任何第三方；扫码后 3 秒自动检测登录结果。</div>
@@ -846,7 +852,7 @@ function startQr(){
     $('qrImg').style.display = '';
     $('qrPlaceholder').style.display = 'none';
     $('btnQrRefresh').style.display = '';
-    $('qrStatus').textContent = '请使用「移动爱家（原和家亲）」APP 扫码';
+    $('qrStatus').textContent = '请用「移动爱家」APP 的「扫一扫」扫码（不是微信/相机）';
     qrTimer = setInterval(pollQr, 3000);
   });
 }
