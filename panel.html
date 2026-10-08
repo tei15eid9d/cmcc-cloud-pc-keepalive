@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>移动云电脑 · 保活面板</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#ffffff; --line:#e3e8ef; --text:#1f2937; --muted:#6b7280;
+    --primary:#2563eb; --primary-d:#1d4ed8; --ok:#16a34a; --warn:#d97706; --err:#dc2626;
+    --ok-bg:#ecfdf3; --warn-bg:#fffbeb; --err-bg:#fef2f2; --info-bg:#eff6ff;
+    --shadow:0 1px 3px rgba(16,24,40,.08),0 1px 2px rgba(16,24,40,.04);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;padding:20px}
+  .wrap{max-width:1080px;margin:0 auto}
+  /* 顶栏 */
+  .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .top h1{font-size:19px;font-weight:700;letter-spacing:.3px}
+  .top .sub{color:var(--muted);font-size:12px}
+  .spacer{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600}
+  .pill.ok{background:var(--ok-bg);color:var(--ok)}
+  .pill.err{background:var(--err-bg);color:var(--err)}
+  .pill.muted{background:#eef1f5;color:var(--muted)}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+  /* 卡片 */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px}
+  .card-h{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .card-h .t{font-weight:700;font-size:14px}
+  .card-b{padding:16px}
+  /* 表单 */
+  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tab{padding:6px 14px;border-radius:8px;border:1px solid var(--line);background:#fafbfc;cursor:pointer;font-size:13px;color:var(--muted)}
+  .tab.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  input[type=text],input[type=password],input[type=tel]{padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;outline:none;background:#fff;color:var(--text)}
+  input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .grow{flex:1;min-width:150px}
+  .w160{width:160px}.w200{width:200px}
+  button{padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--text);font-size:13px;cursor:pointer;transition:.15s}
+  button:hover{border-color:#c7d2fe;background:#f8faff}
+  button.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+  button.primary:hover{background:var(--primary-d)}
+  button.danger{color:var(--err);border-color:#fecaca}
+  button.danger:hover{background:var(--err-bg)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.sm{padding:4px 10px;font-size:12px;border-radius:6px}
+  .captcha-box{display:flex;gap:8px;align-items:center}
+  .captcha-box img{height:36px;border:1px solid var(--line);border-radius:6px;cursor:pointer;background:#fff}
+  .hint{font-size:12px;color:var(--muted)}
+  /* 账号卡片 */
+  .acc{border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+  .acc.expired{border-color:#fca5a5}
+  .expire-tip{background:var(--err-bg);border-bottom:1px solid #fecaca;color:#b91c1c;padding:10px 16px;font-size:12.5px;line-height:1.7;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .expire-tip b{font-weight:700}
+  .acc-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap;background:linear-gradient(180deg,#fdfefe,#f8fafc)}
+  .acc-h .name{font-weight:700;font-size:14px}
+  .acc-h .meta{font-size:12px;color:var(--muted)}
+  .acc-actions{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{ text-align:left;padding:9px 14px;color:var(--muted);font-weight:600;font-size:12px;background:#fafbfd;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:9px 14px;border-bottom:1px solid #f1f4f8;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .vmname{font-weight:600}
+  .sku{font-size:11px;color:var(--muted)}
+  .stat{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px}
+  .stat.run{background:var(--ok-bg);color:var(--ok)}
+  .stat.off{background:#f1f5f9;color:var(--muted)}
+  .stat.opening{background:var(--warn-bg);color:var(--warn)}
+  .stat.err{background:var(--err-bg);color:var(--err)}
+  .num{font-variant-numeric:tabular-nums}
+  /* 开关 */
+  .sw{position:relative;display:inline-block;width:38px;height:21px;flex:none}
+  .sw input{opacity:0;width:0;height:0}
+  .sw .sl{position:absolute;inset:0;background:#cbd5e1;border-radius:99px;cursor:pointer;transition:.2s}
+  .sw .sl:before{content:"";position:absolute;width:15px;height:15px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .sw input:checked+.sl{background:var(--ok)}
+  .sw input:checked+.sl:before{transform:translateX(17px)}
+  .sw input:disabled+.sl{opacity:.5;cursor:not-allowed}
+  /* 日志 */
+  .logs{background:#0f172a;color:#cbd5e1;font:12px/1.7 "SFMono-Regular",Consolas,"Liberation Mono",monospace;border-radius:10px;padding:12px 14px;height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+  .logs .t{color:#64748b}
+  .logs .ok{color:#4ade80}
+  .logs .warn{color:#fbbf24}
+  .logs .error{color:#f87171}
+  .logs .acc{color:#93c5fd}
+  /* 提示条 */
+  #toast{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-80px);background:#111827;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:80vw}
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.err{background:var(--err)}
+  /* 总览条 */
+  .overview{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .ov{flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:12px 14px;box-shadow:var(--shadow)}
+  .ov .n{font-size:22px;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums}
+  .ov .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .ov.ok .n{color:var(--ok)} .ov.err .n{color:var(--err)} .ov.warn .n{color:var(--warn)}
+  .ov .sub{font-size:11px;color:var(--muted);margin-top:4px}
+  /* 保活设置条 */
+  .ka-bar{background:#f8fafc;border-top:1px solid var(--line);padding:10px 16px;display:flex;
+          align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+  .ka-bar .ttl{font-weight:700;color:var(--text);margin-right:2px}
+  .ka-bar .sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+  /* ---- 账号卡片：主操作区 ---- */
+  .name-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+  .name-wrap .name{font-weight:700;font-size:15px}
+  .ops{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;align-items:center}
+  button.btn-start{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:700}
+  button.btn-start:hover{background:#15803d;border-color:#15803d}
+  button.btn-stop{color:var(--err);border-color:#fecaca;font-weight:700}
+  button.btn-stop:hover{background:var(--err-bg);border-color:#fca5a5}
+  button.btn-stop:disabled,button.btn-start:disabled{opacity:.45}
+  button.btn-check{border-color:#bfdbfe;color:#1d4ed8}
+  button.btn-check:hover{background:var(--info-bg)}
+  /* 到期时间行 */
+  .exp-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;
+            color:var(--muted);padding:8px 16px;background:#fcfdfe;border-bottom:1px solid var(--line)}
+  .exp-line b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+  .exp-badge{background:#eef2f7;color:#475569;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700}
+  .exp-badge.warn{background:var(--err-bg);color:var(--err)}
+  .exp-badge.ok{background:var(--ok-bg);color:var(--ok)}
+  .exp-badge.off{background:#f1f5f9;color:var(--muted)}
+  /* 在线检测结果 */
+  .check-box{margin:0;padding:8px 16px;font-size:12.5px;line-height:1.7;border-bottom:1px solid var(--line)}
+  .check-box.ok{background:var(--ok-bg);color:#15803d}
+  .check-box.err{background:var(--err-bg);color:#b91c1c}
+  .check-box.warn{background:var(--warn-bg);color:#b45309}
+  .check-box .kv{color:inherit;opacity:.85}
+  /* 弹窗 */
+  .mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;
+        justify-content:center;z-index:80;padding:16px}
+  .mask.on{display:flex}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:440px;box-shadow:0 20px 50px rgba(15,23,42,.3);overflow:hidden}
+  .modal h3{font-size:15px;padding:14px 18px;border-bottom:1px solid var(--line);font-weight:700}
+  .modal .bd{padding:16px 18px}
+  .modal .ft{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:#fbfcfe}
+  .fld{margin-bottom:14px}
+  .fld label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:var(--text)}
+  .fld .desc{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.6}
+  .fld input[type=text],.fld input[type=datetime-local],.fld input[type=number]{
+    width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;outline:none;background:#fff;color:var(--text)}
+  .fld .inline{display:flex;gap:8px;align-items:center}
+  .fld .inline input{flex:1}
+  .fld .unit{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;font-size:13px;color:var(--muted)}
+  .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .quick button{padding:3px 10px;font-size:12px;border-radius:99px}
+  .foot{color:var(--muted);font-size:12px;text-align:center;margin:22px 0 6px;line-height:1.9}
+  .empty{padding:26px 10px;text-align:center;color:var(--muted);font-size:13px}
+  @media(max-width:720px){body{padding:10px}.w160,.w200{width:100%}th:nth-child(4),td:nth-child(4){display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <h1>移动云电脑 · 保活面板</h1>
+      <div class="sub">协议登录 · 多账号 · 全设备保活（心跳 <span id="ivHb">30</span>s / 上报 <span id="ivReport">120</span>s / 校验 <span id="ivToken">2</span>h）</div>
+    </div>
+    <div class="spacer"></div>
+    <span id="engPill" class="pill muted"><span class="dot"></span>引擎检测中</span>
+    <label class="sw" title="全局保活开关">
+      <input type="checkbox" id="globalSw" checked><span class="sl"></span>
+    </label>
+    <span class="hint">全局</span>
+  </div>
+
+  <!-- 运行总览 -->
+  <div class="overview" id="overview"></div>
+
+  <!-- 添加账号 -->
+  <div class="card">
+    <div class="card-h"><span class="t">添加账号</span><span class="hint" id="addHint">登录成功后自动拉取名下所有云电脑并开始保活</span></div>
+    <div class="card-b">
+      <div class="tabs">
+        <div class="tab on" data-tab="sms">短信验证码登录</div>
+        <div class="tab" data-tab="pwd">账号密码登录</div>
+        <div class="tab" data-tab="qr">扫码登录</div>
+      </div>
+
+      <div id="paneSms">
+        <div class="row">
+          <input type="tel" id="smsPhone" class="grow" placeholder="手机号（11位）" maxlength="11">
+          <button id="btnSendSms" class="w160">发送验证码</button>
+          <input type="text" id="smsCode" class="w160" placeholder="短信验证码" maxlength="8">
+          <button class="primary" id="btnAddSms">登录并保活</button>
+        </div>
+        <div class="hint">短信发送到手机，输入收到的验证码即可。登录协议与官方客户端一致。</div>
+      </div>
+
+      <div id="panePwd" style="display:none">
+        <div class="row">
+          <input type="text" id="pwdUser" class="grow" placeholder="账号（宽带账号/手机号）">
+          <input type="password" id="pwdPass" class="grow" placeholder="密码">
+        </div>
+        <div class="row">
+          <input type="text" id="pwdVcode" class="w160" placeholder="图形验证码">
+          <div class="captcha-box">
+            <img id="pwdCaptcha" title="点击刷新" src="" alt="验证码" style="display:none">
+            <button class="sm" id="btnCaptcha">获取图形验证码</button>
+          </div>
+          <button class="primary" id="btnAddPwd">登录并保活</button>
+        </div>
+        <div class="hint">若提示需要图形验证码，点击图片可刷新。密码在服务端按客户端算法加密传输。</div>
+      </div>
+
+      <div id="paneQr" style="display:none">
+        <div class="row" style="align-items:flex-start">
+          <div style="text-align:center">
+            <img id="qrImg" src="" alt="二维码" style="display:none;width:200px;height:200px;border:1px solid var(--line);border-radius:10px;background:#fff">
+            <div id="qrPlaceholder" style="width:200px;height:200px;border:1px dashed var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">点击右侧按钮获取二维码</div>
+          </div>
+          <div style="flex:1;min-width:180px">
+            <div class="row"><button class="primary" id="btnQr">获取二维码</button>
+            <button class="sm" id="btnQrRefresh" style="display:none">刷新</button></div>
+            <div id="qrStatus" class="hint" style="margin-top:8px">用「移动爱家（原和家亲）」APP 扫码登录</div>
+          </div>
+        </div>
+        <div class="hint">二维码由服务端本地生成，不经过任何第三方；扫码后 3 秒自动检测登录结果。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 账号列表 -->
+  <div id="accounts"></div>
+
+  <!-- 日志 -->
+  <div class="card">
+    <div class="card-h">
+      <span class="t">运行日志</span>
+      <div class="spacer"></div>
+      <span class="hint">实时刷新</span>
+      <button class="sm" id="btnClearLog">清屏</button>
+    </div>
+    <div class="card-b">
+      <div class="logs" id="logBox"></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    保活原理：30 秒云电脑心跳 + 2 分钟设备在线上报 + 关机自动唤醒（getFirmAuth）。<br>
+    协议来自官方客户端逆向，账号凭据仅保存在本服务器 data/accounts.json。<br>
+    公网部署建议设置环境变量 CMCC_PANEL_PASS 作为面板访问密码。
+  </div>
+</div>
+<div id="toast"></div>
+
+<!-- 修改设置弹窗 -->
+<div class="mask" id="setMask">
+  <div class="modal">
+    <h3 id="setTitle">修改设置</h3>
+    <div class="bd">
+      <input type="hidden" id="setKey">
+      <div class="fld">
+        <label>账号备注名</label>
+        <input type="text" id="setRemark" placeholder="例如：风自冷" maxlength="32">
+        <div class="desc">只影响面板显示，方便区分多个账号。</div>
+      </div>
+      <div class="fld">
+        <label>到期时间</label>
+        <input type="datetime-local" id="setExpire">
+        <div class="quick">
+          <button type="button" data-add="86400">+1 天</button>
+          <button type="button" data-add="604800">+7 天</button>
+          <button type="button" data-add="2592000">+30 天</button>
+          <button type="button" id="btnExpireClear">设为不限期</button>
+        </div>
+        <div class="desc">到点后<b>强制停止保活</b>，不再心跳 / 上报 / 保活。留空＝不限期。</div>
+      </div>
+      <div class="fld">
+        <label>保活间隔</label>
+        <div class="inline">
+          <input type="number" id="setInterval" min="0" step="0.5" placeholder="23">
+          <span class="unit" id="setUnit">小时</span>
+        </div>
+        <div class="desc">云电脑静止 24 小时会关机，就设 <b>23</b>（小时）——每 23 小时主动保活一次，
+          在计时器到期前把时间重置。填 0 ＝ 关闭定时保活（只靠 30 秒心跳）。</div>
+      </div>
+      <div class="fld">
+        <label>兜底</label>
+        <label class="sw" style="vertical-align:middle"><input type="checkbox" id="setWake"><span class="sl"></span></label>
+        <span class="hint" style="margin-left:8px">检测到云电脑已关机时自动开机</span>
+      </div>
+    </div>
+    <div class="ft">
+      <button id="btnSetCancel">取消</button>
+      <button class="primary" id="btnSetSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+var STATE = { accounts: [], seq: 0, busy: {}, check: {} };
+
+function toast(msg, isErr){
+  var t = $('toast');
+  t.textContent = msg;
+  t.className = 'on' + (isErr ? ' err' : '');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(function(){ t.className = ''; }, 2600);
+}
+function fmtTime(ts){
+  if(!ts) return '—';
+  var d = new Date(ts * 1000);
+  var p = function(n){ return (n<10?'0':'') + n; };
+  return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+}
+function fmtAgo(ts){
+  if(!ts) return '—';
+  var s = Math.max(0, Math.floor(Date.now()/1000) - ts);
+  if(s < 60) return s + 's前';
+  if(s < 3600) return Math.floor(s/60) + 'm前';
+  return Math.floor(s/3600) + 'h前';
+}
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function api(path, opt){
+  return fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opt || {}))
+    .then(function(r){ return r.json(); });
+}
+function post(path, body){
+  return api(path, {method:'POST', body: JSON.stringify(body || {})});
+}
+
+/* ---------- 轮询状态 ---------- */
+function pullState(){
+  api('/api/state').then(function(d){
+    if(!d.ok){ if(d.error === 'unauthorized'){ return; } return; }
+    STATE.accounts = d.accounts || [];
+    var eng = $('engPill');
+    if(d.supervisor_alive){
+      eng.className = 'pill ok'; eng.innerHTML = '<span class="dot"></span>引擎运行中';
+    } else {
+      eng.className = 'pill err'; eng.innerHTML = '<span class="dot"></span>引擎已停止';
+    }
+    if(d.intervals){
+      $('ivHb').textContent = d.intervals.hb;
+      $('ivReport').textContent = d.intervals.report;
+      $('ivToken').textContent = Math.round(d.intervals.token/3600);
+    }
+    var gs = $('globalSw');
+    if(document.activeElement !== gs){
+      gs.checked = !d.settings || d.settings.global_enabled !== false;
+    }
+    renderOverview();
+    renderAccounts();
+  }).catch(function(){});
+}
+
+function fbPad(n){ return (n < 10 ? '0' : '') + n; }
+function fmtDT(ts){
+  if(!ts) return '—';
+  var d = new Date(ts * 1000);
+  return d.getFullYear() + '-' + fbPad(d.getMonth()+1) + '-' + fbPad(d.getDate()) + ' ' +
+         fbPad(d.getHours()) + ':' + fbPad(d.getMinutes());
+}
+function fmtMD(ts){
+  if(!ts) return '—';
+  var d = new Date(ts * 1000);
+  return fbPad(d.getMonth()+1) + '-' + fbPad(d.getDate()) + ' ' + fbPad(d.getHours()) + ':' + fbPad(d.getMinutes());
+}
+function fmtLeft(sec){
+  if(sec <= 0) return '已到';
+  if(sec < 60) return sec + ' 秒';
+  if(sec < 3600) return Math.floor(sec/60) + ' 分钟';
+  if(sec < 86400) return Math.floor(sec/3600) + ' 小时' + fbPad(Math.floor(sec%3600/60)) + ' 分';
+  return Math.floor(sec/86400) + ' 天' + Math.floor(sec%86400/3600) + ' 小时';
+}
+function toLocalInput(ts){
+  if(!ts) return '';
+  var d = new Date(ts * 1000);
+  return d.getFullYear() + '-' + fbPad(d.getMonth()+1) + '-' + fbPad(d.getDate()) + 'T' +
+         fbPad(d.getHours()) + ':' + fbPad(d.getMinutes());
+}
+
+function statusPill(acc){
+  var map = {
+    'ok': ['ok', '正常保活'],
+    'idle': ['muted', '初始化中'],
+    'new': ['muted', '未激活'],
+    'error': ['err', '异常'],
+    'stopped': ['muted', '已停止'],
+    'token_expired': ['err', '登录已失效'],
+    'expired_stopped': ['err', '已到期停止']
+  };
+  var it = map[acc.status] || ['muted', acc.status || '未知'];
+  return '<span class="pill ' + it[0] + '">' + esc(it[1]) + '</span>';
+}
+function vmPill(dev){
+  var s = dev.vmStatusShow || '';
+  var cls = 'off';
+  if(dev.vmStatus === 0) cls = 'off';
+  else if(dev.vmStatus === 2) cls = 'opening';
+  else if(dev.vmStatus === 1 || dev.vmStatus === 3 || s.indexOf('运行') >= 0) cls = 'run';
+  if(!s) s = dev.vmStatus === 0 ? '已关机' : ('状态' + dev.vmStatus);
+  return '<span class="stat ' + cls + '">' + esc(s) + '</span>';
+}
+function hbPill(dev){
+  if(!dev.last_heartbeat) return '<span class="hint">等待首跳</span>';
+  var c = dev.hb_code;
+  var cls = 'ok', txt = '正常';
+  if(c === 2000){ cls = 'ok'; txt = '正常'; }
+  else if(c === 4041 || c === 4039 || c === 4040 || c === 4042){ cls = 'ok'; txt = '在线(锁屏)'; }
+  else if(c === 4043){ cls = 'warn'; txt = '被占用'; }
+  else if(c >= 0){ cls = 'warn'; txt = '码' + c; }
+  else { cls = 'err'; txt = '网络错误'; }
+  var p = cls === 'ok' ? 'ok' : (cls === 'err' ? 'err' : 'warn');
+  return '<span class="pill ' + p + '" title="' + esc(dev.hb_msg) + '">' + esc(txt) + '</span> <span class="hint">' + fmtAgo(dev.last_heartbeat) + '</span>';
+}
+
+/* 到期时间行 */
+function expLine(acc){
+  var exp = acc.expire_at || 0;
+  var badge, tip;
+  if(!exp){
+    badge = '<span class="exp-badge off">不限期</span>';
+    tip = '<span class="hint">未设置到期时间，会一直保活</span>';
+  } else if(acc.expired){
+    badge = '<span class="exp-badge warn">已到期停止</span>';
+    tip = '<span class="hint">已到 ' + fmtDT(exp) + '，保活已被强制停止</span>';
+  } else {
+    var left = acc.expire_left || (exp - Math.floor(Date.now()/1000));
+    badge = '<span class="exp-badge ' + (left < 3600 ? 'warn' : 'ok') + '">剩 ' + fmtLeft(left) + '</span>';
+    tip = '<span class="hint">到点后强制停止保活</span>';
+  }
+  return '<div class="exp-line">⏰ 到期时间 <b>' + (exp ? fmtDT(exp) : '不限期') + '</b> ' + badge + tip +
+         '<button class="sm" style="margin-left:auto" onclick="openSettings(\'' + esc(acc.key) + '\')">修改设置</button></div>';
+}
+
+/* 在线检测结果块 */
+function checkBox(acc){
+  var r = (STATE.check || {})[acc.key];
+  if(!r) return '';
+  var cls = r.online === true ? 'ok' : (r.online === false ? 'err' : 'warn');
+  var head = r.online === true ? '✅ 账号在线：保活链路正常'
+           : (r.online === false ? '❌ 账号不在线：登录态已失效，保活无法继续'
+                                 : '⚠ 无法判定：网络异常');
+  var lines = (r.detail || []).map(function(d){
+    return d.step + ': code=' + d.code + (d.msg ? ' ' + d.msg : '');
+  }).join('　·　');
+  return '<div class="check-box ' + cls + '">' + head +
+         (lines ? '<div class="kv">' + esc(lines) + '</div>' : '') +
+         (r.online === false ? '<div class="kv">改过密码 / 在别处登录 / 会话被顶都会导致这个结果 → 请用「短信重登」或「扫码登录」恢复。</div>' : '') +
+         '</div>';
+}
+
+function renderAccounts(){
+  var box = $('accounts');
+  if(!STATE.accounts.length){
+    box.innerHTML = '<div class="card"><div class="empty">还没有账号，用上面的表单添加一个吧</div></div>';
+    return;
+  }
+  var html = STATE.accounts.map(function(acc){
+    var key = acc.key;
+    var devices = acc.devices || [];
+    var running = acc.enabled !== false && acc.status !== 'expired_stopped';
+    var rows = devices.map(function(d){
+      var sid = d.userServiceId;
+      return '<tr>' +
+        '<td><div class="vmname">' + esc(d.vmName || '云电脑') + '</div><div class="sku">' + esc(d.skuName || '') + (d.skuSpecStr ? ' · ' + esc(d.skuSpecStr) : '') + '</div></td>' +
+        '<td>' + vmPill(d) + '</td>' +
+        '<td>' + hbPill(d) + '</td>' +
+        '<td>' + kaCell(acc, d) + '</td>' +
+        '<td class="num">' + (d.wake_count || 0) + ' <span class="hint">' + (d.last_wake ? fmtAgo(d.last_wake) : '') + '</span></td>' +
+        '<td><label class="sw"><input type="checkbox" ' + (d.enabled ? 'checked' : '') +
+          ' onchange="toggleDevice(\'' + key + '\',' + sid + ',this.checked)"><span class="sl"></span></label></td>' +
+        '</tr>';
+    }).join('');
+    var deviceTable = devices.length
+      ? '<table><thead><tr><th>云电脑</th><th>状态</th><th>心跳</th><th>定时保活</th><th>唤醒</th><th>保活</th></tr></thead><tbody>' + rows + '</tbody></table>'
+      : '<div class="empty">暂无云电脑，点「检测在线」或「刷新设备」拉取</div>';
+    var tot = acc.totals || {};
+    var isExp = acc.status === 'token_expired';
+    var expireTip = isExp
+      ? '<div class="expire-tip"><span>⚠ <b>登录已失效</b>（4015）——多半是你在电脑上打开了官方客户端，' +
+        '把这台服务器导入的旧 token 顶掉了（两者共用同一设备身份）。</span>' +
+        '<button class="sm primary" onclick="reloginAcc(\'' + key + '\',\'' + esc(acc.phone || acc.login) + '\')">短信重登</button>' +
+        '<span class="relogin-box" id="rl_' + key + '" style="display:none">' +
+          '<input type="text" placeholder="验证码" maxlength="8" style="width:96px">' +
+          '<button class="sm" onclick="submitRelogin(\'' + key + '\')">确认</button></span>' +
+        '<span>重登后服务器会有独立会话，不再与电脑客户端冲突。也可以直接用上方「扫码登录」新建。</span></div>'
+      : '';
+    return '<div class="acc' + (isExp ? ' expired' : '') + '">' +
+      /* 头部：账号名 + 检测在线 + 主操作 */
+      '<div class="acc-h">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div class="name-wrap">' +
+            '<span class="name">' + esc(acc.display || acc.login) + '</span>' +
+            statusPill(acc) +
+            '<button class="sm btn-check" onclick="checkOnline(\'' + key + '\')">🔍 检测是否在线</button>' +
+          '</div>' +
+          '<div class="meta">' + esc(acc.login) + ' · ID ' + esc(acc.userId) + ' · Token ****' + esc(acc.token_tail) +
+          (acc.status_msg ? ' · <span style="color:var(--err)">' + esc(acc.status_msg) + '</span>' : '') + '</div>' +
+        '</div>' +
+        '<div class="ops">' +
+          '<button class="sm btn-start" ' + (running ? 'disabled' : '') + ' onclick="startAcc(\'' + key + '\')">▶ 启动保活</button>' +
+          '<button class="sm btn-stop" ' + (running ? '' : 'disabled') + ' onclick="stopAcc(\'' + key + '\')">■ 停止保活</button>' +
+          '<button class="sm primary" onclick="keepaliveNow(\'' + key + '\')">⚡ 立即保活一次</button>' +
+          '<button class="sm" onclick="openSettings(\'' + key + '\')">⚙ 修改设置</button>' +
+          '<button class="sm danger" onclick="removeAcc(\'' + key + '\')">删除</button>' +
+        '</div>' +
+      '</div>' +
+      expireTip +
+      expLine(acc) +
+      checkBox(acc) +
+      deviceTable +
+      '<div class="ka-bar">' +
+        '<span class="ttl">⚙ 保活设置</span>' +
+        '<span class="hint">每</span>' +
+        '<input type="text" style="width:70px" id="ka_' + key + '" value="' + fmtIvInput(acc.keepalive_interval) + '">' +
+        '<span class="hint">' + ivUnitLabel(acc.keepalive_interval) + '主动保活一次</span>' +
+        '<button class="sm primary" onclick="setKeepalive(\'' + key + '\')">保存</button>' +
+        '<span class="sep"></span>' +
+        '<label class="sw" title="检测到已关机时自动开机"><input type="checkbox" ' + (acc.wake_on_off !== false ? 'checked' : '') +
+          ' onchange="setWakeOnOff(\'' + key + '\',this.checked)"><span class="sl"></span></label>' +
+        '<span class="hint">关机自动唤醒（兜底）</span>' +
+        '<span class="sep"></span>' +
+        '<button class="sm" onclick="refreshAcc(\'' + key + '\')">刷新设备</button>' +
+        '<button class="sm" onclick="wakeAcc(\'' + key + '\')">立即唤醒</button>' +
+        '<span class="hint" id="sa_' + key + '">' + fmtAgo(acc.last_scan) + '刷新过</span>' +
+      '</div>' +
+      '<div class="card-b" style="padding:8px 16px;border-top:1px solid var(--line)">' +
+        '<span class="hint">心跳成功 ' + (tot.hb_ok||0) + ' · 失败 ' + (tot.hb_err||0) + ' · 上报 ' + (tot.reports||0) +
+        ' · 定时保活 ' + (tot.auths||0) + ' · 唤醒 ' + (tot.wakes||0) + ' · 最近调度 ' + fmtAgo(acc.last_tick) + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  box.innerHTML = html;
+}
+
+/* 保活间隔：内部按分钟存，界面按"小时"显示（整点显示整数） */
+function fmtIvInput(mins){
+  if(mins == null) mins = 360;
+  mins = parseInt(mins, 10) || 0;
+  if(!mins) return '0';
+  var h = mins / 60;
+  return (h % 1 === 0) ? String(h) : h.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+}
+function ivUnitLabel(mins){
+  mins = parseInt(mins, 10) || 0;
+  return mins ? '小时' : '（已关闭定时保活）';
+}
+
+function renderOverview(){
+  var accs = STATE.accounts || [];
+  var nAcc = accs.length, nVm = 0, on = 0, alive = 0, bad = 0, stopped = 0;
+  var now = Math.floor(Date.now() / 1000);
+  accs.forEach(function(a){
+    (a.devices || []).forEach(function(d){
+      nVm++;
+      var st = (d.vmStatusShow || '');
+      if(d.vmStatus !== 0 && st.indexOf('关机') < 0) on++;
+      if(d.enabled && a.enabled && a.status === 'ok' && d.last_heartbeat && (now - d.last_heartbeat) < 120) alive++;
+    });
+    if(a.status === 'token_expired' || a.status === 'error' || a.status === 'expired_stopped') bad++;
+    if(a.enabled === false) stopped++;
+  });
+  var cards = [
+    ['', nAcc, '账号', (stopped ? (stopped + ' 个已停止') : '全部运行中')],
+    ['', nVm, '云电脑', on + ' 台运行中'],
+    ['ok', alive, '正在保活', '心跳 2 分钟内'],
+    ['err', bad, '需要关注', bad ? '失效/到期账号' : '无异常'],
+  ];
+  $('overview').innerHTML = cards.map(function(c){
+    return '<div class="ov ' + c[0] + '"><div class="n">' + c[1] + '</div>' +
+           '<div class="l">' + c[2] + '</div><div class="sub">' + c[3] + '</div></div>';
+  }).join('');
+}
+function a0(n){ return n > 0; }
+
+/* ---------- 日志 ---------- */
+function pullLogs(){
+  api('/api/logs?since=' + STATE.seq).then(function(d){
+    if(!d.ok) return;
+    STATE.seq = d.seq || STATE.seq;
+    if(!d.logs || !d.logs.length) return;
+    var box = $('logBox');
+    var stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    d.logs.forEach(function(l){
+      var div = document.createElement('div');
+      div.innerHTML = '<span class="t">' + fmtTime(l.t) + '</span> ' +
+        '<span class="' + l.level + '">[' + l.level.toUpperCase() + ']</span> ' +
+        (l.account ? '<span class="acc">[' + esc(l.account) + ']</span> ' : '') +
+        esc(l.msg);
+      box.appendChild(div);
+    });
+    while(box.childElementCount > 500) box.removeChild(box.firstChild);
+    if(stick) box.scrollTop = box.scrollHeight;
+  }).catch(function(){});
+}
+
+/* ---------- 操作 ---------- */
+function toggleAcc(key, on){ post('/api/account/toggle', {key:key, enabled:on}).then(function(d){
+  toast(on ? '已启动保活' : '已停止保活', !d.ok); pullState(); }); }
+function toggleDevice(key, sid, on){ post('/api/device/toggle', {key:key, sid:sid, enabled:on}).then(function(d){
+  toast(on ? '已开启该设备保活' : '已暂停该设备保活', !d.ok); }); }
+function removeAcc(key){
+  if(!confirm('确定删除该账号？其云电脑将停止保活。')) return;
+  post('/api/account/remove', {key:key}).then(function(d){ toast('已删除', !d.ok); pullState(); });
+}
+
+/* 启动 / 停止保活 */
+function startAcc(key){
+  post('/api/account/start', {key:key}).then(function(d){
+    toast(d.ok ? '▶ 已启动保活：正在立即校验登录态并保活一次' : ('启动失败：' + (d.error||'')), !d.ok);
+    pullState();
+  });
+}
+function stopAcc(key){
+  post('/api/account/stop', {key:key}).then(function(d){
+    toast(d.ok ? '■ 已停止保活：不再心跳 / 上报 / 保活' : ('停止失败：' + (d.error||'')), !d.ok);
+    pullState();
+  });
+}
+
+/* 检测是否还在线 */
+function checkOnline(key){
+  toast('正在检测是否在线…');
+  post('/api/account/check', {key:key}).then(function(d){
+    if(!d.ok){ toast('检测失败：' + (d.error||''), true); return; }
+    STATE.check[key] = d;
+    var msg = d.online === true ? '✅ 在线，保活链路正常'
+            : (d.online === false ? '❌ 不在线：登录态已失效' : '⚠ 网络异常，无法判定');
+    toast(msg, d.online === false);
+    pullState();
+  });
+}
+
+/* 立即执行一次保活 */
+function keepaliveNow(key){
+  toast('正在立即执行保活…');
+  post('/api/account/keepalive_now', {key:key}).then(function(d){
+    if(!d.ok){
+      var err = d.error || ('保活失败（' + (d.err_count||0) + ' 台）');
+      toast(err, true);
+    } else {
+      toast('⚡ 已立即保活 ' + d.ok_count + ' 台（计时器已重置）');
+    }
+    pullState();
+  });
+}
+
+/* 修改设置弹窗 */
+var setTimer = null;
+function openSettings(key){
+  var acc = (STATE.accounts || []).filter(function(a){ return a.key === key; })[0];
+  if(!acc) return;
+  $('setKey').value = key;
+  $('setTitle').textContent = '修改设置 · ' + (acc.display || acc.login);
+  $('setRemark').value = acc.remark || '';
+  $('setExpire').value = toLocalInput(acc.expire_at || 0);
+  var mins = (acc.keepalive_interval == null ? 360 : acc.keepalive_interval);
+  $('setInterval').value = fmtIvInput(mins);
+  $('setWake').checked = acc.wake_on_off !== false;
+  $('setMask').className = 'mask on';
+  setTimeout(function(){ $('setRemark').focus(); }, 50);
+}
+function closeSettings(){ $('setMask').className = 'mask'; }
+$('btnSetCancel').onclick = closeSettings;
+$('setMask').onclick = function(e){ if(e.target === this) closeSettings(); };
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeSettings(); });
+document.querySelectorAll('.quick [data-add]').forEach(function(b){
+  b.onclick = function(){
+    var add = parseInt(b.getAttribute('data-add'), 10);
+    var cur = $('setExpire').value ? new Date($('setExpire').value) : new Date();
+    var base = isNaN(cur.getTime()) ? new Date() : cur;
+    base.setSeconds(0, 0);
+    base.setTime(base.getTime() + add * 1000);
+    $('setExpire').value = toLocalInput(Math.floor(base.getTime() / 1000));
+  };
+});
+$('btnExpireClear').onclick = function(){ $('setExpire').value = ''; };
+$('btnSetSave').onclick = function(){
+  var key = $('setKey').value;
+  var ih = parseFloat($('setInterval').value);
+  if(isNaN(ih) || ih < 0 || ih > 720){ toast('间隔请填 0 - 720 之间的小时数（0=关闭定时保活）', true); return; }
+  var expRaw = $('setExpire').value;
+  var expTs = 0;
+  if(expRaw){
+    var dt = new Date(expRaw);
+    if(isNaN(dt.getTime())){ toast('到期时间格式不正确', true); return; }
+    expTs = Math.floor(dt.getTime() / 1000);
+  }
+  var body = { key: key, remark: $('setRemark').value.trim(),
+               expire_at: expTs, interval_min: Math.round(ih * 60),
+               wake_on_off: $('setWake').checked };
+  post('/api/account/update', body).then(function(d){
+    if(d.ok){
+      toast('设置已保存');
+      closeSettings();
+      pullState();
+    } else {
+      toast('保存失败：' + (d.error || ''), true);
+    }
+  });
+};
+
+function refreshAcc(key){
+  toast('正在刷新设备列表…');
+  post('/api/account/refresh', {key:key}).then(function(d){
+    toast(d.ok ? ('已刷新，共 ' + d.count + ' 台') : ('刷新失败: ' + d.error), !d.ok); pullState();
+  });
+}
+function wakeAcc(key){
+  toast('正在下发唤醒…');
+  post('/api/account/wake', {key:key}).then(function(d){
+    toast(d.ok ? '唤醒指令已下发' : ('唤醒失败: ' + d.error), !d.ok); pullState();
+  });
+}
+function kaCell(acc, dev){
+  var iv = (acc.keepalive_interval == null ? 360 : acc.keepalive_interval);
+  if(!iv) return '<span class="hint">未启用</span>';
+  var last = dev.last_auth || 0;
+  var left = (last + iv * 60) - Math.floor(Date.now() / 1000);
+  var txt;
+  if(left <= 0) txt = '即将执行';
+  else if(left < 60) txt = left + 's 后';
+  else if(left < 3600) txt = Math.floor(left / 60) + 'm 后';
+  else if(left < 86400) txt = (left / 3600).toFixed(1) + 'h 后';
+  else txt = (left / 86400).toFixed(1) + 'd 后';
+  return '<span class="num">' + (dev.auth_count || 0) + ' 次</span> <span class="hint">' +
+         (last ? fmtAgo(last) : '待执行') + ' · 下次 ' + txt + '</span>';
+}
+
+function setKeepalive(key){
+  var el = $('ka_' + key);
+  var h = parseFloat(el.value);
+  if(isNaN(h) || h < 0 || h > 720){ toast('请输入 0-720 之间的小时数（0=关闭定时保活）', true); return; }
+  var mins = Math.round(h * 60);
+  post('/api/account/keepalive', {key: key, interval: mins}).then(function(d){
+    toast(d.ok ? ('已设为每 ' + h + ' 小时主动保活一次') : ('设置失败: ' + d.error), !d.ok);
+    pullState();
+  });
+}
+function setWakeOnOff(key, on){
+  post('/api/account/keepalive', {key: key, wake_on_off: on}).then(function(d){
+    toast(d.ok ? ('关机自动唤醒已' + (on ? '开启' : '关闭')) : '设置失败', !d.ok);
+  });
+}
+
+function reloginAcc(key, phone){
+  var box = $('rl_' + key);
+  if(box && box.style.display !== 'none'){
+    toast('验证码已发送，请在输入框填入后点「确认」');
+    return;
+  }
+  post('/api/sms/send', {phone: phone}).then(function(d){
+    if(!d.ok){ toast('验证码发送失败: ' + (d.error || ''), true); return; }
+    toast('验证码已发送至 ' + phone);
+    if(box){ box.style.display = ''; var i = box.querySelector('input'); if(i) i.focus(); }
+  });
+}
+function submitRelogin(key){
+  var box = $('rl_' + key);
+  if(!box) return;
+  var inp = box.querySelector('input');
+  var code = (inp.value || '').trim();
+  if(!code){ toast('请输入验证码', true); return; }
+  post('/api/account/relogin', {key: key, code: code}).then(function(r){
+    if(r.ok){
+      toast('重新登录成功，保活已恢复');
+      box.style.display = 'none'; inp.value = '';
+    } else {
+      toast('重登失败: ' + (r.error || ''), true);
+    }
+    pullState();
+  });
+}
+
+/* ---------- 添加账号 ---------- */
+var smsCooldown = 0;
+function startCooldown(){
+  var btn = $('btnSendSms');
+  smsCooldown = 60;
+  btn.disabled = true;
+  var t = setInterval(function(){
+    smsCooldown--;
+    btn.textContent = smsCooldown + 's 后重发';
+    if(smsCooldown <= 0){ clearInterval(t); btn.disabled = false; btn.textContent = '发送验证码'; }
+  }, 1000);
+  btn.textContent = smsCooldown + 's 后重发';
+}
+$('btnSendSms').onclick = function(){
+  var phone = $('smsPhone').value.trim();
+  if(!/^1\d{10}$/.test(phone)){ toast('请输入正确的手机号', true); return; }
+  var btn = this;
+  btn.disabled = true;
+  post('/api/sms/send', {phone: phone}).then(function(d){
+    if(d.ok){ toast('验证码已发送'); startCooldown(); }
+    else { toast(d.error || '发送失败', true); btn.disabled = false; }
+  }).catch(function(){ btn.disabled = false; });
+};
+$('btnAddSms').onclick = function(){
+  var phone = $('smsPhone').value.trim();
+  var code = $('smsCode').value.trim();
+  if(!phone || !code){ toast('请填写手机号和验证码', true); return; }
+  var btn = this; btn.disabled = true; btn.textContent = '登录中…';
+  post('/api/account/sms', {phone: phone, code: code}).then(function(d){
+    btn.disabled = false; btn.textContent = '登录并保活';
+    if(d.ok){ toast('登录成功，已开始保活'); $('smsCode').value = ''; pullState(); }
+    else toast(d.error || '登录失败', true);
+  }).catch(function(){ btn.disabled = false; btn.textContent = '登录并保活'; });
+};
+
+/* 密码登录 */
+$('btnCaptcha').onclick = function(){
+  var u = $('pwdUser').value.trim();
+  if(!u){ toast('请先填写账号', true); return; }
+  api('/api/captcha?login=' + encodeURIComponent(u)).then(function(d){
+    if(d.ok){ $('pwdCaptcha').src = d.img; $('pwdCaptcha').style.display = ''; toast('图形验证码已刷新'); }
+    else toast(d.error || '获取失败', true);
+  });
+};
+$('pwdCaptcha').onclick = function(){ $('btnCaptcha').onclick(); };
+$('btnAddPwd').onclick = function(){
+  var u = $('pwdUser').value.trim();
+  var p = $('pwdPass').value;
+  var v = $('pwdVcode').value.trim();
+  if(!u || !p){ toast('请填写账号和密码', true); return; }
+  var btn = this; btn.disabled = true; btn.textContent = '登录中…';
+  post('/api/account/pwd', {username: u, password: p, vcode: v}).then(function(d){
+    btn.disabled = false; btn.textContent = '登录并保活';
+    if(d.ok){ toast('登录成功，已开始保活'); $('pwdPass').value = ''; pullState(); }
+    else {
+      toast(d.error || '登录失败', true);
+      if(d.need_vcode){ $('btnCaptcha').onclick(); }
+    }
+  }).catch(function(){ btn.disabled = false; btn.textContent = '登录并保活'; });
+};
+
+/* ---------- 扫码登录 ---------- */
+var qrTimer = null;
+function startQr(){
+  clearInterval(qrTimer);
+  $('qrStatus').textContent = '正在获取二维码…';
+  post('/api/qrlogin/start', {}).then(function(d){
+    if(!d.ok){ toast(d.error || '获取二维码失败', true); $('qrStatus').textContent = '获取失败：' + (d.error||''); return; }
+    STATE.qrSid = d.sid;
+    $('qrImg').src = d.img;
+    $('qrImg').style.display = '';
+    $('qrPlaceholder').style.display = 'none';
+    $('btnQrRefresh').style.display = '';
+    $('qrStatus').textContent = '请使用「移动爱家（原和家亲）」APP 扫码';
+    qrTimer = setInterval(pollQr, 3000);
+  });
+}
+function pollQr(){
+  if(!STATE.qrSid) return;
+  api('/api/qrlogin/poll?sid=' + STATE.qrSid).then(function(d){
+    if(!d.ok){
+      $('qrStatus').textContent = d.error || '轮询失败';
+      clearInterval(qrTimer);
+      return;
+    }
+    if(d.status === 'success'){
+      $('qrStatus').textContent = '登录成功：' + d.login + '（' + d.devices + ' 台云电脑已加入保活）';
+      clearInterval(qrTimer); STATE.qrSid = '';
+      toast('扫码登录成功，已开始保活'); pullState();
+    } else if(d.status === 'scaning'){
+      $('qrStatus').textContent = '已扫码，请在手机上确认…';
+    } else if(d.status === 'expired'){
+      $('qrStatus').textContent = '二维码已失效，正在刷新…';
+      clearInterval(qrTimer);
+      startQr();
+    } else {
+      $('qrStatus').textContent = '等待扫码…';
+    }
+  }).catch(function(){});
+}
+$('btnQr').onclick = startQr;
+$('btnQrRefresh').onclick = startQr;
+
+/* Tab 切换 */
+document.querySelectorAll('.tab').forEach(function(t){
+  t.onclick = function(){
+    document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('on'); });
+    t.classList.add('on');
+    var v = t.getAttribute('data-tab');
+    $('paneSms').style.display = v === 'sms' ? '' : 'none';
+    $('panePwd').style.display = v === 'pwd' ? '' : 'none';
+    $('paneQr').style.display = v === 'qr' ? '' : 'none';
+    if(v === 'qr' && !STATE.qrSid) startQr();
+  };
+});
+
+/* 全局开关 */
+$('globalSw').onchange = function(){
+  post('/api/settings', {global_enabled: this.checked}).then(function(d){
+    toast(d.ok ? (this.checked ? '全局保活已开启' : '全局保活已暂停') : '设置失败', !d.ok);
+  }.bind(this));
+};
+$('btnClearLog').onclick = function(){ $('logBox').innerHTML = ''; };
+
+/* 启动轮询 */
+pullState();
+pullLogs();
+setInterval(pullState, 3000);
+setInterval(pullLogs, 2500);
+</script>
+</body>
+</html>
