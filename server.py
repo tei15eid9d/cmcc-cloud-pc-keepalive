@@ -38,10 +38,16 @@ from cmcc_api import (  # noqa: E402
 from qr import make_qr_png  # noqa: E402  零依赖二维码编码
 import scg  # noqa: E402  SCG（深信服）真开机/真保活：CEM 链 + 可选 SPICE 会话
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 路径：源码运行 = 脚本目录；PyInstaller 打包运行 = exe 所在目录（data 持久化），
+# panel.html 从打包资源目录（sys._MEIPASS）读
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+    PANEL_FILE = os.path.join(getattr(sys, '_MEIPASS', BASE_DIR), 'panel.html')
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    PANEL_FILE = os.path.join(BASE_DIR, 'panel.html')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 DATA_FILE = os.path.join(DATA_DIR, 'accounts.json')
-PANEL_FILE = os.path.join(BASE_DIR, 'panel.html')
 
 # 保活节奏（秒）
 HB_INTERVAL = 30          # 云电脑心跳（对齐客户端 cloudPcheartbeatTime=30000）
