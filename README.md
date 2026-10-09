@@ -20,7 +20,29 @@ cmcc_server/
 
 ---
 
-## 一、它是怎么保活的
+## 一、它是怎么保活的（v2：SCG 真保活）
+
+> **关键认知**：云电脑的"自动关机计时器"按**桌面连接活动**重置，不是按心跳 API 重置。
+> 旧版只发 firm_auth/heartbeat 属于控制面请求，机器照样到点关机（用户实测踩坑）。
+
+现在的保活链路（SCG/深信服线路，协议取自 [1936-zero/cmcc-cloud-alive](https://github.com/1936-zero/cmcc-cloud-alive)，MIT）：
+
+1. **真开机**：检测到关机 → `firm_auth`（新 scAuthCode）→ CEM `getConnectInfo`（`api.soho.komect.com:1443`）
+   → 触发 SCG VM 开机（实测 10 秒变运行中）→ 未就绪则轮询 `getVmReadyStatus`
+2. **真保活**：每 N 分钟一次 `firm_auth`（新码）→ `getConnectInfo` → **SPICE 长会话（默认 120 秒）**，
+   真正建立桌面级连接重置空闲计时器
+3. 心跳/上报/登录态校验继续保留（会话健康度观测）
+
+注意：`scAuthCode` 是**一次性**的，每次开机/保活都必须先重新 `firm_auth` 取新码。
+
+**SPICE 长会话为可选增强**：检测 `/opt/cmcc-alive`（或环境变量 `CMCC_ALIVE_PATH`）下的
+[cmcc-cloud-alive](https://github.com/1936-zero/cmcc-cloud-alive) 包，找到则用完整 SPICE 会话；
+找不到自动降级为"每次保活触发一次 getConnectInfo"（仍是连接事件），面板徽标会显示当前模式：
+`SCG·SPICE` / `SCG·连接` / `控制面(弱)`。
+
+面板每个账号有：**⏻ 立即开机**（对已关机设备走 CEM 开机链）和 **⚡ 立即保活一次**（立刻跑一轮 SCG 会话）。
+
+## 一(旧)、控制面链路
 
 逆向官方客户端（`CMCC-JTYDN.exe` / `app.asar`）后，把客户端挂在后台时发的三类请求搬到服务器上跑：
 
