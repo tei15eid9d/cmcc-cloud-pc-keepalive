@@ -36,6 +36,7 @@ from cmcc_api import (  # noqa: E402
     CODE_NEED_VC, CODE_NEED_ACTIVATE, CODE_IN_ACTIVATE, CODE_INIT_ERR,
 )
 from qr import make_qr_png  # noqa: E402  零依赖二维码编码
+import scg  # noqa: E402  SCG（深信服）真开机/真保活：CEM 链 + 可选 SPICE 会话
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
@@ -52,6 +53,7 @@ TICK = 5                  # 引擎调度粒度
 
 VM_RUNNING = 3            # vmStatus 3=运行中；另 1 亦视为运行中(vmStatusShow)
 VM_OFF = 0                # 0=已关机
+VM_OFF_SET = (0, 16)      # 0=已关机；16 实测也是已关机（用户机器出现过）
 VM_OPENING = 2            # 2=开机中
 VM_LINKING = 12           # 12=连接中
 
@@ -346,6 +348,130 @@ def vm_is_on(dev):
     return dev.get('vmStatus') in (1, VM_RUNNING, VM_OPENING, VM_LINKING)
 
 
+# ---------------------------------------------------------------------------
+# SCG 真保活 / 真开机（后台线程，避免阻塞 5 秒调度循环）
+# ---------------------------------------------------------------------------
+_SCG_BUSY = {}   # sid -> True（该设备正在跑 SCG 会话）
+
+
+def _scg_free(sid):
+    return not _SCG_BUSY.get(str(sid))
+
+
+def scg_keepalive_worker(acc, dev, kind='定时保活', duration=120):
+    """一次 SCG 保活：firm_auth(新码) -> getConnectInfo(触发连接) -> [SPICE 会话]"""
+    sid = str(dev.get('userServiceId'))
+    login = acc.get('login', '')
+    try:
+        api = POOL.get(acc)
+        r = api.firm_auth(dev['userServiceId'])
+        if r.get('code') != CODE_OK or not r.get('data'):
+            raise RuntimeError('firm_auth [%s] %s' % (r.get('code'), r.get('msg', '')))
+        data = r['data']
+        if not scg.is_scg(data):
+            acc['scg_mode'] = 'legacy'
+            dev['auth_kind'] = '控制面'
+            dev['auth_msg'] = '非 SCG 线路（ZTE 未适配，仅控制面保活）'
+            LOG.warn('[%s] %s 非 SCG 线路，退回控制面保活' % (dev['userServiceId'], dev['vmName']), login)
+            STORE.save()
+            return
+        out = scg.run_keepalive_session(
+            data, device_id=(acc.get('device') or {}).get('deviceId', ''), duration=duration)
+        mode = out.get('mode', 'connect')
+        acc['scg_mode'] = mode
+        dev['auth_kind'] = mode
+        dev['auth_msg'] = 'SCG·%s %s' % (mode, out.get('scg', ''))
+        dev['auth_count'] = dev.get('auth_count', 0) + 1
+        T = STORE.totals(acc)
+        T['auths'] = T.get('auths', 0) + 1
+        LOG.ok('%s完成 [%s] %s —— SCG·%s %s%s'
+               % (kind, dev['userServiceId'], dev['vmName'], mode, out.get('scg', ''),
+                  '（SPICE 会话 %ss）' % duration if mode == 'spice' else '（连接事件）'), login)
+        STORE.save()
+    except Exception as e:
+        T = STORE.totals(acc)
+        T['auth_err'] = T.get('auth_err', 0) + 1
+        dev['auth_msg'] = '失败: %s' % str(e)[:120]
+        LOG.warn('SCG 保活失败 [%s]: %s' % (dev['userServiceId'], str(e)[:160]), login)
+        STORE.save()
+    finally:
+        _SCG_BUSY[sid] = False
+
+
+def scg_keepalive_async(acc, dev, kind='定时保活', duration=120):
+    sid = str(dev.get('userServiceId'))
+    if not _scg_free(sid):
+        return False
+    _SCG_BUSY[sid] = True
+    dev['last_auth'] = now_ts()      # 先记账，避免调度循环每 5 秒重复派发
+    threading.Thread(target=scg_keepalive_worker,
+                     args=(acc, dev, kind, duration), daemon=True).start()
+    return True
+
+
+def scg_boot_worker(acc, dev):
+    """真开机：firm_auth(新码) -> getConnectInfo 触发 SCG VM 开机 -> 轮询至运行中"""
+    sid = str(dev.get('userServiceId'))
+    login = acc.get('login', '')
+    try:
+        api = POOL.get(acc)
+        r = api.firm_auth(dev['userServiceId'])
+        if r.get('code') != CODE_OK or not r.get('data'):
+            raise RuntimeError('firm_auth [%s] %s' % (r.get('code'), r.get('msg', '')))
+        data = r['data']
+        if not scg.is_scg(data):
+            raise RuntimeError('非 SCG 线路（ZTE 未适配）')
+        t0 = now_ts()
+        ci = scg.get_connect_info(
+            data['scAuthCode'], str(data.get('vmId') or ''),
+            device_id=(acc.get('device') or {}).get('deviceId', ''))
+        LOG.ok('开机指令已下发 [%s] %s（ready=%s scg=%s:%s）'
+               % (dev['userServiceId'], dev['vmName'], ci.get('readyStatus'),
+                  ci['scgIp'], ci['scgPort']), login)
+        # 轮询 vmStatus 直到运行中（最多 ~90 秒）
+        for _ in range(9):
+            time.sleep(10)
+            try:
+                items = api.list_cloud_pcs()
+                for it in (items if isinstance(items, list) else items.get('data', [])):
+                    if int(it.get('userServiceId') or 0) == dev['userServiceId']:
+                        dev['vmStatus'] = it.get('vmStatus')
+                        dev['vmStatusShow'] = it.get('vmStatusShow') or ''
+                        break
+            except Exception:
+                pass
+            if dev.get('vmStatus') in (1, VM_RUNNING):
+                break
+        if dev.get('vmStatus') in (1, VM_RUNNING):
+            dev['last_wake'] = now_ts()
+            dev['wake_count'] = dev.get('wake_count', 0) + 1
+            T = STORE.totals(acc)
+            T['wakes'] = T.get('wakes', 0) + 1
+            LOG.ok('开机成功 [%s] %s → %s（耗时 %ds）'
+                   % (dev['userServiceId'], dev['vmName'],
+                      dev.get('vmStatusShow') or '运行中', now_ts() - t0), login)
+        else:
+            LOG.warn('开机等待超时 [%s] %s 当前 vmStatus=%s %s'
+                     % (dev['userServiceId'], dev['vmName'], dev.get('vmStatus'),
+                        dev.get('vmStatusShow', '')), login)
+        STORE.save()
+    except Exception as e:
+        LOG.error('开机失败 [%s]: %s' % (dev['userServiceId'], str(e)[:160]), login)
+        STORE.save()
+    finally:
+        _SCG_BUSY[sid] = False
+
+
+def scg_boot_async(acc, dev):
+    sid = str(dev.get('userServiceId'))
+    if not _scg_free(sid):
+        return False
+    _SCG_BUSY[sid] = True
+    dev['last_wake'] = now_ts()       # 立刻占用冷却窗口
+    threading.Thread(target=scg_boot_worker, args=(acc, dev), daemon=True).start()
+    return True
+
+
 def refresh_devices(acc, api, do_wake=True):
     """拉取云电脑列表，合并到 acc['devices']；返回列表。
     新增设备默认启用保活；已关机设备触发唤醒。"""
@@ -382,25 +508,17 @@ def refresh_devices(acc, api, do_wake=True):
     acc['devices'] = new_devices
     STORE.save()
 
-    # 兜底：检测到已关机时自动唤醒（受账号的 wake_on_off 开关控制）
+    # 兜底：检测到已关机时自动真开机（受账号的 wake_on_off 开关控制）
+    # 走 CEM 链（getConnectInfo 触发开机），不是只发 firm_auth
     if do_wake and acc.get('wake_on_off', True):
         for dev in new_devices:
-            if dev['enabled'] and dev.get('vmStatus') == VM_OFF:
+            off = (dev.get('vmStatus') in VM_OFF_SET
+                   or '关机' in (dev.get('vmStatusShow') or ''))
+            if dev['enabled'] and off:
                 if now_ts() - dev.get('last_wake', 0) >= WAKE_COOLDOWN:
-                    try:
-                        r = api.firm_auth(dev['userServiceId'])
-                        dev['last_auth'] = now_ts()
-                        dev['last_wake'] = now_ts()
-                        dev['auth_msg'] = '[%s] %s' % (r.get('code'), r.get('msg', ''))
-                        if r.get('code') == CODE_OK:
-                            dev['wake_count'] = dev.get('wake_count', 0) + 1
-                            STORE.totals(acc)['wakes'] += 1
-                            LOG.ok('已关机 → 触发开机 [%s] %s' % (dev['userServiceId'], dev['vmName']), acc['login'])
-                        else:
-                            LOG.warn('唤醒返回异常 [%s] %s: %s' % (dev['userServiceId'], r.get('code'), r.get('msg')), acc['login'])
-                        STORE.save()
-                    except Exception as e:
-                        LOG.error('唤醒失败 [%s]: %s' % (dev['userServiceId'], e), acc['login'])
+                    if scg_boot_async(acc, dev):
+                        LOG.info('检测到已关机 → 触发真开机 [%s] %s'
+                                 % (dev['userServiceId'], dev['vmName']), acc['login'])
     return new_devices
 
 
@@ -500,9 +618,9 @@ def account_tick(acc):
             acc['last_report'] = t - REPORT_INTERVAL + 60
             LOG.warn('infoReport 异常: %s' % e, login)
 
-    # 4) 定时保活：每隔 N 分钟主动发一次连接凭证请求
-    #    这是核心——在平台 24 小时计时器到期之前就主动"用一次"，把计时器重置，
-    #    而不是等它关机了再去开机。
+    # 4) 定时保活：每隔 N 分钟跑一次 SCG 真保活会话
+    #    （firm_auth 新码 -> getConnectInfo 触发连接/重置空闲计时 -> 可选 SPICE 会话）
+    #    心跳 API 不重置"自动关机计时器"，只有桌面连接活动才重置——这是旧版关机的根因。
     interval_min = acc.get('keepalive_interval', DEFAULT_KEEPALIVE_INTERVAL)
     if interval_min and interval_min > 0:
         due = t - interval_min * 60
@@ -511,23 +629,11 @@ def account_tick(acc):
                 continue
             if dev.get('last_auth', 0) and dev['last_auth'] > due:
                 continue
-            try:
-                r = api.firm_auth(dev['userServiceId'])
-                dev['last_auth'] = t
-                dev['auth_kind'] = 'keepalive'
-                dev['auth_msg'] = '[%s] %s' % (r.get('code'), r.get('msg', ''))
-                if r.get('code') == CODE_OK:
-                    dev['auth_count'] = dev.get('auth_count', 0) + 1
-                    T['auths'] = T.get('auths', 0) + 1
-                    LOG.ok('定时保活成功 [%s] %s（计时器已重置，下次 %d 分钟后）'
-                           % (dev['userServiceId'], dev['vmName'], interval_min), login)
-                else:
-                    T['auth_err'] = T.get('auth_err', 0) + 1
-                    LOG.warn('定时保活返回异常 [%s] %s: %s'
-                             % (dev['userServiceId'], r.get('code'), r.get('msg', '')), login)
-                STORE.save()
-            except Exception as e:
-                LOG.warn('定时保活失败 [%s]: %s' % (dev['userServiceId'], e), login)
+            if not _scg_free(dev.get('userServiceId')):
+                continue
+            if scg_keepalive_async(acc, dev, kind='定时保活'):
+                LOG.info('定时保活已派发 [%s] %s（SCG 会话，后台执行）'
+                         % (dev['userServiceId'], dev['vmName']), login)
 
     # 5) 每台启用的设备发心跳（30s）
     for dev in acc.get('devices', []):
@@ -699,6 +805,7 @@ def pub_account(acc):
         'userId': acc.get('userId', ''),
         'isSubAccount': acc.get('isSubAccount', False),
         'enabled': acc.get('enabled', True),
+        'scg_mode': acc.get('scg_mode', ''),   # spice=SPICE长会话 / connect=连接事件 / legacy=控制面
         'keepalive_interval': acc.get('keepalive_interval', DEFAULT_KEEPALIVE_INTERVAL),
         'wake_on_off': acc.get('wake_on_off', True),
         'status': acc.get('status', 'idle'),
@@ -967,6 +1074,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._api_account_check(body)
             elif path == '/api/account/keepalive_now':
                 self._api_account_keepalive_now(body)
+            elif path == '/api/account/boot':
+                self._api_account_boot(body)
             else:
                 self._json({'ok': False, 'error': 'not found'}, 404)
         except Exception as e:
@@ -1338,7 +1447,7 @@ class Handler(BaseHTTPRequestHandler):
                     'time': now_ts()})
 
     def _api_account_keepalive_now(self, body):
-        """立即执行一次保活（对所有启用设备发 getFirmAuth），忽略间隔计时"""
+        """立即执行一次真保活（SCG 会话），忽略间隔计时"""
         key = body.get('key') or ''
         acc = STORE.get(key)
         if not acc:
@@ -1348,41 +1457,53 @@ class Handler(BaseHTTPRequestHandler):
         if not acc.get('devices'):
             self._json({'ok': False, 'error': '还没有云电脑列表，请先点「检测在线」或「刷新设备」'})
             return
-        api = POOL.get(acc)
-        results = []
-        ok_n = err_n = 0
+        launched = 0
         for dev in acc.get('devices', []):
             if not dev.get('enabled'):
                 continue
-            sid = dev.get('userServiceId')
-            try:
-                r = api.firm_auth(sid)
-                code = r.get('code')
-                dev['last_auth'] = now_ts()
-                dev['auth_kind'] = 'manual'
-                dev['auth_msg'] = '[%s] %s' % (code, r.get('msg', ''))
-                if code == CODE_OK:
-                    dev['auth_count'] = dev.get('auth_count', 0) + 1
-                    STORE.totals(acc)['auths'] += 1
-                    ok_n += 1
-                else:
-                    err_n += 1
-                    STORE.totals(acc)['auth_err'] += 1
-                    if code in CODE_UNTOKEN or code == CODE_H5_LOGINED:
-                        acc['status'] = 'token_expired'
-                        acc['status_msg'] = '登录态失效，请重新登录'
-                results.append({'sid': sid, 'code': code, 'msg': r.get('msg', '')})
-            except Exception as e:
-                err_n += 1
-                results.append({'sid': sid, 'code': -1, 'msg': str(e)})
-        STORE.save()
-        if ok_n and not err_n:
-            LOG.ok('已立即执行一次保活：%d 台成功（计时器已重置）' % ok_n, acc.get('login'))
-        elif ok_n:
-            LOG.warn('立即保活：成功 %d 台 / 失败 %d 台' % (ok_n, err_n), acc.get('login'))
+            if scg_keepalive_async(acc, dev, kind='手动保活'):
+                launched += 1
+        if launched:
+            LOG.ok('手动保活已派发：%d 台（SCG 真保活会话）' % launched, acc.get('login'))
+            self._json({'ok': True, 'ok_count': launched, 'err_count': 0,
+                        'results': [], 'note': 'SCG 会话在后台执行，结果见日志'})
         else:
-            LOG.warn('立即保活未成功：%s' % json.dumps(results, ensure_ascii=False)[:200], acc.get('login'))
-        self._json({'ok': err_n == 0, 'ok_count': ok_n, 'err_count': err_n, 'results': results})
+            self._json({'ok': False, 'error': '所有设备都在执行 SCG 会话中，请稍候'})
+
+    def _api_account_boot(self, body):
+        """立即真开机：对已关机的设备走 CEM 开机链（getConnectInfo 触发）"""
+        key = body.get('key') or ''
+        acc = STORE.get(key)
+        if not acc:
+            self._json({'ok': False, 'error': '账号不存在'})
+            return
+        ensure_defaults(acc)
+        if not acc.get('devices'):
+            self._json({'ok': False, 'error': '还没有云电脑列表，请先「刷新设备」'})
+            return
+        api = POOL.get(acc)
+        # 先刷新一次状态，避免对已运行的机器开机
+        try:
+            refresh_devices(acc, api, do_wake=False)
+        except Exception as e:
+            self._json({'ok': False, 'error': '刷新设备失败: %s' % e})
+            return
+        launched, skipped = 0, 0
+        for dev in acc.get('devices', []):
+            off = (dev.get('vmStatus') in VM_OFF_SET
+                   or '关机' in (dev.get('vmStatusShow') or ''))
+            if not off:
+                skipped += 1
+                continue
+            if scg_boot_async(acc, dev):
+                launched += 1
+        if launched:
+            LOG.ok('手动开机已派发：%d 台（CEM 开机链，后台执行）' % launched, acc.get('login'))
+            self._json({'ok': True, 'boot_count': launched, 'running_count': skipped,
+                        'note': '开机在后台执行，约 10-60 秒，结果见日志'})
+        else:
+            self._json({'ok': False, 'boot_count': 0, 'running_count': skipped,
+                        'error': '没有需要开机的设备（%d 台已在运行）' % skipped})
 
     def _api_account_relogin(self, body):
         """传 key + 短信验证码，为已有账号重新登录刷新 token"""
