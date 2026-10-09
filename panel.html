@@ -385,6 +385,17 @@ function toLocalInput(ts){
          fbPad(d.getHours()) + ':' + fbPad(d.getMinutes());
 }
 
+function scgPill(acc){
+  var m = acc.scg_mode || '';
+  if(!m) return '';
+  var map = {
+    'spice':  ['ok',   'SCG·SPICE'],
+    'connect':['muted','SCG·连接'],
+    'legacy': ['warn', '控制面(弱)']
+  };
+  var it = map[m] || ['muted', m];
+  return '<span class="pill ' + it[0] + '" title="保活方式：spice=建立桌面长会话重置空闲计时；connect=触发连接事件；legacy=仅控制面心跳（可能被自动关机）">' + esc(it[1]) + '</span>';
+}
 function statusPill(acc){
   var map = {
     'ok': ['ok', '正常保活'],
@@ -498,7 +509,7 @@ function renderAccounts(){
         '<div style="min-width:0;flex:1">' +
           '<div class="name-wrap">' +
             '<span class="name">' + esc(acc.display || acc.login) + '</span>' +
-            statusPill(acc) +
+            statusPill(acc) + scgPill(acc) +
             '<button class="sm btn-check" onclick="checkOnline(\'' + key + '\')">🔍 检测是否在线</button>' +
           '</div>' +
           '<div class="meta">' + esc(acc.login) + ' · ID ' + esc(acc.userId) + ' · Token ****' + esc(acc.token_tail) +
@@ -507,6 +518,7 @@ function renderAccounts(){
         '<div class="ops">' +
           '<button class="sm btn-start" ' + (running ? 'disabled' : '') + ' onclick="startAcc(\'' + key + '\')">▶ 启动保活</button>' +
           '<button class="sm btn-stop" ' + (running ? '' : 'disabled') + ' onclick="stopAcc(\'' + key + '\')">■ 停止保活</button>' +
+          '<button class="sm" style="border-color:#bbf7d0;color:#15803d;font-weight:700" onclick="bootAcc(\'' + key + '\')">⏻ 立即开机</button>' +
           '<button class="sm primary" onclick="keepaliveNow(\'' + key + '\')">⚡ 立即保活一次</button>' +
           '<button class="sm" onclick="openSettings(\'' + key + '\')">⚙ 修改设置</button>' +
           '<button class="sm danger" onclick="removeAcc(\'' + key + '\')">删除</button>' +
@@ -638,16 +650,21 @@ function checkOnline(key){
   });
 }
 
-/* 立即执行一次保活 */
+/* 立即执行一次保活（SCG 真会话） */
 function keepaliveNow(key){
-  toast('正在立即执行保活…');
+  toast('正在派发 SCG 保活会话…');
   post('/api/account/keepalive_now', {key:key}).then(function(d){
-    if(!d.ok){
-      var err = d.error || ('保活失败（' + (d.err_count||0) + ' 台）');
-      toast(err, true);
-    } else {
-      toast('⚡ 已立即保活 ' + d.ok_count + ' 台（计时器已重置）');
-    }
+    if(!d.ok){ toast(d.error || '派发失败', true); }
+    else { toast('⚡ 已派发 ' + d.ok_count + ' 台 SCG 保活会话（结果看日志）'); }
+    pullState();
+  });
+}
+/* 立即开机（CEM 开机链，只对已关机的设备） */
+function bootAcc(key){
+  toast('正在派发开机指令…');
+  post('/api/account/boot', {key:key}).then(function(d){
+    if(d.ok){ toast('⏻ 开机指令已下发 ' + d.boot_count + ' 台，约 10-60 秒（看日志）'); }
+    else { toast(d.error || '没有需要开机的设备', !d.boot_count); }
     pullState();
   });
 }
